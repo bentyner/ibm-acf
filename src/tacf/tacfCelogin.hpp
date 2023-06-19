@@ -67,6 +67,7 @@ class TacfCelogin
      * @param auth          A user auth value to populate.
      * @param type          The ACF type value to populate.
      * @param expires       The ACF expiration time to populate.
+     * @param expireDate    The ACF expiration date to populate.
      * @param replay        Current and updated replay id value.
      *
      * @return A non-zero error value or zero on success.
@@ -74,7 +75,8 @@ class TacfCelogin
     int install(const uint8_t* acf, const uint64_t acfSize,
                 const uint8_t* pubkey, const uint64_t pubkeySize,
                 const std::string& serial, std::string& auth,
-                CeLogin::AcfType& type, uint64_t& expires, uint64_t& replayId)
+                CeLogin::AcfType& type, uint64_t& expires,
+                std::string& expireDate, uint64_t& replayId)
     {
         uint64_t replayIdNew;
         uint64_t timestamp = getTimestamp();
@@ -118,6 +120,22 @@ class TacfCelogin
         // Update the replay id.
         replayId = replayIdNew;
 
+        // Get the ACF expiration details.
+        CeLogin::AcfType ceLoginType = CeLogin::AcfType::AcfType_Invalid;
+        CeLogin::AcfVersion version  = CeLogin::CeLoginInvalidVersion;
+        bool hasReplay               = false;
+        CeLogin::CeLogin_Date ceLoginDate;
+
+        if (CeLogin::CeLoginRc::Success ==
+            CeLogin::extractACFMetadataV2(acf, acfSize, timestamp, pubkey,
+                                          pubkeySize, serial.data(),
+                                          serial.size(), ceLoginType, expires,
+                                          ceLoginDate, version, hasReplay))
+        {
+            // Get expiration date as string.
+            expireDate = getDate(ceLoginDate);
+        }
+
         // And return success.
         return 0;
     }
@@ -131,23 +149,27 @@ class TacfCelogin
      * @param pubkey        A Pointer to a public key for validating the ACF.
      * @param pubkeySize    The size of the pulic key being provided.
      * @param serial        Serial number of machine associated with the ACF.
-     * @param expires       The ACF expiration date to populate.
+     * @param expires       The ACF expiration time to populate.
+     * @param expireDate    The ACF expiration date to populate.
      *
      * @return A non-zero error value or zero on success.
      */
     int verify(const uint8_t* acf, const uint64_t acfSize,
                const uint8_t* pubkey, const uint64_t pubkeySize,
-               const std::string& serial, uint64_t& expires)
+               const std::string& serial, uint64_t& expires,
+               std::string& expireDate)
     {
         uint64_t timestamp           = getTimestamp();
         CeLogin::AcfType ceLoginType = CeLogin::AcfType::AcfType_Invalid;
         CeLogin::AcfVersion version  = CeLogin::CeLoginInvalidVersion;
         bool hasReplay               = false;
+        CeLogin::CeLogin_Date ceLoginDate;
 
-        // Verify the ACF and get ACF expiration time.
+        // Verify the ACF and get ACF expiration details.
         CeLogin::CeLoginRc authRc = CeLogin::extractACFMetadataV2(
             acf, acfSize, timestamp, pubkey, pubkeySize, serial.data(),
-            serial.size(), ceLoginType, expires, version, hasReplay);
+            serial.size(), ceLoginType, expires, ceLoginDate, version,
+            hasReplay);
 
         // Return celogin specific error code.
         if (CeLogin::CeLoginRc::Success != authRc)
@@ -155,7 +177,10 @@ class TacfCelogin
             return authRc;
         }
 
-        // Or success.
+        // Get expiration date as string.
+        expireDate = getDate(ceLoginDate);
+
+        // And return success.
         return 0;
     }
 
@@ -167,5 +192,17 @@ class TacfCelogin
         return std::chrono::duration_cast<std::chrono::seconds>(
                    (std::chrono::system_clock::now()).time_since_epoch())
             .count();
+    }
+
+    /** @brief A helper function to get expiration date as string */
+    std::string getDate(CeLogin::CeLogin_Date ceLoginDate)
+    {
+        // Convert to expected format.
+        std::string buffer(sizeof("yyyy-mm-dd\0"), ' ');
+        sprintf(buffer.data(), "%04u-%02u-%02u", ceLoginDate.mYear,
+                ceLoginDate.mMonth, ceLoginDate.mDay);
+        buffer.resize(sizeof("yyyy-mm-dd"));
+
+        return buffer;
     }
 };

@@ -226,7 +226,8 @@ class Tacf : TargetedAcf
             {
                 // Verify ACF.
                 authRc = authProvider.verify(acf, acfSize, pubkey.data(),
-                                             pubkey.size(), serial, expireTime);
+                                             pubkey.size(), serial, expireTime,
+                                             expires);
             }
             // Or if action is install.
             else if (TargetedAcf::TargetedAcfAction::Install == action)
@@ -237,7 +238,7 @@ class Tacf : TargetedAcf
                 // Install ACF.
                 authRc = authProvider.install(
                     acf, acfSize, pubkey.data(), pubkey.size(), serial, auth,
-                    ceLoginAcfType, expireTime, replayId);
+                    ceLoginAcfType, expireTime, expires, replayId);
 
                 // Convert from celogin ACF type to targeted ACF type.
                 type = translateAcfType(ceLoginAcfType);
@@ -254,7 +255,6 @@ class Tacf : TargetedAcf
             if (CeLogin::CeLoginRc::Success == authRc)
             {
                 // Get expiration date
-                expires = getDate(expireTime);
 
                 // And return success.
                 return tacfSuccess;
@@ -504,18 +504,6 @@ class Tacf : TargetedAcf
         va_start(args, format);
         inf(format, args);
         va_end(args);
-    }
-
-    /** @brief A helper function to convert timestamp to date */
-    std::string getDate(const uint64_t timestamp)
-    {
-        // Get expiration date
-        struct tm* t = gmtime(reinterpret_cast<const time_t*>(&timestamp));
-        std::string buffer(100, ' ');
-        size_t written = std::strftime(buffer.data(), buffer.size(), "%F", t);
-        buffer.resize(written);
-
-        return buffer;
     }
 
     /** @brief A helper function to convert between acf types */
